@@ -2566,6 +2566,8 @@ const HUD_MAO = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAB4AAAAeCAYAAAA7M
   function netBroker() {
     var el = document.getElementById('netUrl');
     var v = (el && el.value || '').trim();
+    // 兼容旧缓存：填了公共中转地址也强制用当前服务器
+    if (/broker\.emqx|hivemq|trycloudflare/i.test(v)) v = '';
     if (!v) v = location.origin;
     return v.replace(/^http/, 'ws').replace(/\/+$/, '');
   }
@@ -2575,13 +2577,20 @@ const HUD_MAO = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAB4AAAAeCAYAAAA7M
       var ws;
       try { ws = new WebSocket(netBroker()); } catch (e) { return reject(e); }
       var done = false;
-      ws.onopen = function () { if (!done) { done = true; netClient = ws; resolve(ws); } };
+      ws.onopen = function () {
+        if (!done) {
+          done = true;
+          netClient = ws;
+          netStatus('已连接 ' + location.host);
+          resolve(ws);
+        }
+      };
       ws.onerror = function () { if (!done) { done = true; reject(new Error('连接失败')); } };
       ws.onmessage = function (ev) {
         var m; try { m = JSON.parse(ev.data); } catch (e) { return; }
         netOnMessage(m);
       };
-      ws.onclose = function () { netPeer = false; netStatus('连接已断开'); };
+      ws.onclose = function () { netPeer = false; netStatus('连接已断开 · 刷新页面重试'); };
     });
   }
   function netSend(obj) {
