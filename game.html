@@ -431,6 +431,7 @@ window.addEventListener('error', function (e) {
       <h3 id="selName">—</h3>
       <p id="selBio"></p>
       <p id="selRole"></p>
+      <p id="selNet" style="display:none;color:#8fe3ff"></p>
       <div class="sel-actions">
         <button id="selStart" disabled>开始战斗</button>
         <button id="selBack">返回</button>
@@ -981,7 +982,7 @@ const HUD_MAO = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAB4AAAAeCAYAAAA7M
     if (stage.src.indexOf(stSrc) < 0) stage.src = stSrc;
     fighters = [
       mkFighter(1, 150, 1, k1, false),
-      mkFighter(2, 330, -1, k2, true)
+      mkFighter(2, 330, -1, k2, netMode ? false : true)   // 联机时对手由远端玩家控制
     ];
     fighters[1].name = 'AI ' + k2.name;
     beams = []; summons = []; parts = []; floats = []; domain = null;
@@ -3789,6 +3790,19 @@ const HUD_MAO = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAB4AAAAeCAYAAAA7M
     if (modeEl) modeEl.style.display = 'none';
     var aiRow = document.querySelector('.sel-ai');
     if (aiRow) aiRow.style.display = (raidMode || netRole) ? 'none' : 'block';
+    var netLine = document.getElementById('selNet');
+    if (netLine) {
+      if (netRole) {
+        netLine.style.display = 'block';
+        netLine.textContent = netRole === 'host'
+          ? '联机 · 房间 ' + netCode + ' · 你是房主，选好场景后开始'
+          : '联机 · 房间 ' + netCode + ' · 选好角色，等房主开始';
+      } else {
+        netLine.style.display = 'none';
+      }
+    }
+    var stBtn = document.getElementById('selStart');
+    if (stBtn && netRole === 'guest') { stBtn.textContent = '准备'; stBtn.disabled = false; }
     var bc = document.getElementById('bossCard');
     if (bc) {
       var unlockedNow = bossUnlocked();
@@ -3938,6 +3952,10 @@ const HUD_MAO = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAB4AAAAeCAYAAAA7M
     if (netRole === 'guest') {
       netSend({ t: 'msg', d: { k: 'p', kit: selectedKit } });
       netStatus('已选择 ' + selectedKit + '，等待房主开始');
+      var b = document.getElementById('selStart');
+      if (b) { b.textContent = '已准备 · 等房主'; b.disabled = true; }
+      var hint = document.getElementById('selNet');
+      if (hint) hint.textContent = '已准备 · 等待房主开始战斗';
       return;
     }
     tryFullscreenLandscape();
