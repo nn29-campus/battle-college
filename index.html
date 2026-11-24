@@ -194,6 +194,23 @@
   #setClose{width:100%;padding:12px;background:#fff;color:#0b0b0c;border:0;
     font:800 13px system-ui;letter-spacing:.2em}
 
+  /* ---------- 联机大厅 ---------- */
+  #net{position:fixed;inset:0;z-index:32;display:none;flex-direction:column;align-items:center;
+    justify-content:center;gap:14px;padding:16px;overflow-y:auto;
+    background:radial-gradient(70% 62% at 50% 42%,#161618,#0a0a0c 86%);color:#eee}
+  .nt-title{font:700 clamp(14px,3.4vw,20px)/1 system-ui;letter-spacing:.34em;color:#e6e6e6}
+  .nt-row{display:flex;gap:8px;align-items:center;justify-content:center;flex-wrap:wrap}
+  .nt-input{width:clamp(150px,42vw,320px);padding:11px 12px;background:#101012;color:#eee;
+    border:1px solid rgba(255,255,255,.3);font:600 12px system-ui;letter-spacing:.04em}
+  .nt-input.nt-code{width:88px;text-align:center;letter-spacing:.3em}
+  .nt-btn{padding:11px 18px;background:#fff;color:#0a0a0b;border:1px solid #fff;
+    font:700 12px system-ui;letter-spacing:.14em}
+  .nt-btn:active{background:#c9c9ce}
+  .nt-status{font:600 11px system-ui;color:#9a9aa0;letter-spacing:.08em;min-height:16px;text-align:center}
+  .nt-back{padding:10px 22px;background:transparent;color:#ddd;border:1px solid rgba(255,255,255,.4);
+    font:600 12px system-ui;letter-spacing:.14em}
+  .nt-hint{font:500 10px/1.6 system-ui;color:#6f6f76;letter-spacing:.04em;text-align:center;max-width:420px}
+
   /* ---------- 模式选择 ---------- */
   #mode{position:fixed;inset:0;z-index:30;display:none;flex-direction:column;align-items:center;
     justify-content:center;gap:20px;padding:16px;overflow-y:auto;
@@ -322,11 +339,30 @@ window.addEventListener('error', function (e) {
     <button class="md-card" data-mode="ai">
       <b>AI 对战</b><small>自由选择双方角色</small>
     </button>
+    <button class="md-card" data-mode="net">
+      <b>联 机</b><small>和同学远程对战 · 房间号加入</small>
+    </button>
     <button class="md-card" data-mode="raid">
       <b>讨 伐</b><small>挑战五条悟 · 难度锁定地狱<br>获胜后解锁该角色</small>
     </button>
   </div>
   <button id="mdBack" class="md-back">返 回</button>
+</div>
+
+<div id="net">
+  <div class="nt-title">联 机 对 战</div>
+  <div class="nt-row">
+    <input id="netUrl" class="nt-input" placeholder="服务器地址，如 http://1.2.3.4:8080">
+  </div>
+  <div class="nt-row">
+    <button class="nt-btn" id="netCreate">创建房间</button>
+    <input id="netCode" class="nt-input nt-code" placeholder="房号" maxlength="4" inputmode="numeric">
+    <button class="nt-btn" id="netJoin">加入</button>
+  </div>
+  <div class="nt-status" id="netStatus">未连接</div>
+  <div class="nt-actions">
+    <button id="netBack" class="nt-back">返 回</button>
+  </div>
 </div>
 
 <div id="stage">
@@ -919,8 +955,9 @@ const HUD_MAO = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAB4AAAAeCAYAAAA7M
     return f;
   }
 
-  function reset(kitKey, foeKey, stageId) {
-    mode = 'ai';
+  function reset(kitKey, foeKey, stageId, netMode) {
+    mode = netMode ? 'net' : 'ai';
+    netRole = netMode || null;
     AI_CUR = raidMode ? 'hell' : AI_LEVEL;
     if (raidMode) foeKey = 'boss';
     var k1 = KITS[kitKey] || KITS.sao;
@@ -2427,6 +2464,124 @@ const HUD_MAO = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAB4AAAAeCAYAAAA7M
 
   var flashes = [];
 
+  /* ------------------------------------------------ 联机 */
+  var netWS = null, netRole = null, netCode = null, netPeer = false;
+  var guestKit = 'sao', netAcc = 0;
+
+  function netStatus(txt) {
+    var el = document.getElementById('netStatus');
+    if (el) el.textContent = txt;
+    var e2 = document.getElementById('err');
+    if (e2 && txt === '') e2.style.display = 'none';
+  }
+  function netErr(txt) {
+    var e2 = document.getElementById('err');
+    if (e2) { e2.style.display = 'block'; e2.textContent = txt; }
+  }
+  function netUrl() {
+    var inp = document.getElementById('netUrl');
+    var u = (inp && inp.value || '').trim();
+    if (!u) u = location.origin;
+    u = u.replace(/^http/, 'ws').replace(/\/+$/, '');
+    return u;
+  }
+  function netConnect() {
+    return new Promise(function (resolve, reject) {
+      try { if (netWS) { try { netWS.close(); } catch (e) {} } } catch (e) {}
+      var ws;
+      try { ws = new WebSocket(netUrl()); } catch (e) { return reject(e); }
+      var opened = false;
+      ws.onopen = function () { opened = true; netWS = ws; resolve(ws); };
+      ws.onerror = function () { if (!opened) reject(new Error('连接失败，检查地址和端口')); };
+      ws.onclose = function () { netPeer = false; netStatus('连接已断开'); };
+      ws.onmessage = function (ev) {
+        var m; try { m = JSON.parse(ev.data); } catch (e) { return; }
+        netOnMessage(m);
+      };
+    });
+  }
+  function netSend(obj) {
+    if (netWS && netWS.readyState === 1) netWS.send(JSON.stringify(obj));
+  }
+  function netOnMessage(m) {
+    if (m.t === 'created') {
+      netCode = m.code; netRole = 'host';
+      netStatus('房间 ' + m.code + ' · 等待对手加入…');
+    } else if (m.t === 'joined') {
+      netRole = 'guest'; netCode = m.code;
+      netStatus('已加入房间 ' + m.code + ' · 等待房主开始');
+      var nt2 = document.getElementById('net'); if (nt2) nt2.style.display = 'none';
+      showSelect();
+    } else if (m.t === 'peerJoin') {
+      netPeer = true;
+      netStatus('对手已加入 · 房间 ' + netCode);
+      netSend({ t: 'msg', d: { k: 'hello', kit: guestKit } });
+      var nt1 = document.getElementById('net'); if (nt1) nt1.style.display = 'none';
+      showSelect();
+    } else if (m.t === 'peerLeft') {
+      netPeer = false; netStatus('对手已离开');
+    } else if (m.t === 'err') {
+      netStatus(''); netErr(m.msg || '操作失败');
+    } else if (m.t === 'msg' && m.d) {
+      netHandleMsg(m.d);
+    }
+  }
+  function netHandleMsg(d) {
+    if (d.k === 'p') { guestKit = d.kit || guestKit; }
+    else if (d.k === 'start' && netRole === 'guest') {
+      selectedKit = d.k2; selectedAI = d.k1;
+      reset(d.k2, d.k1, d.stage, 'guest');
+    } else if (d.k === 'input' && netRole === 'host') {
+      var keys = ['atk', 'jump', 'dodge', 'skill', 'skillHold', 'ult'];
+      for (var i = 0; i < keys.length; i++) if (d.d[keys[i]]) PRESS[2][keys[i]] = true;
+      HOLD[2].left = d.d.left ? 1 : 0;
+      HOLD[2].right = d.d.right ? 1 : 0;
+    } else if (d.k === 'state' && netRole === 'guest') {
+      netApplyState(d.f);
+    } else if (d.k === 'over' && netRole === 'guest') {
+      winner = d.winner;
+      phase = 'over';
+    }
+  }
+  function netSnap(f) {
+    return [Math.round(f.hp), Math.round(f.x * 10) / 10, Math.round(f.y * 10) / 10,
+            f.face, f.state, Math.round(f.animT * 100) / 100,
+            Math.round(f.energy), f.form === 'deer' ? 1 : 0,
+            f.buffT > 0 ? 1 : 0, f.onGround ? 1 : 0];
+  }
+  function netApplyState(arr) {
+    if (!arr || arr.length < 2) return;
+    for (var i = 0; i < 2; i++) {
+      var f = fighters[i], s2 = arr[i];
+      if (!f || !s2) continue;
+      f.hp = s2[0];
+      f.netTX = s2[1]; f.netTY = s2[2];
+      f.face = s2[3]; f.state = s2[4]; f.animT = s2[5];
+      f.energy = s2[6];
+      f.form = s2[7] ? 'deer' : null;
+      f.buffT = s2[8] ? 1 : 0;
+      f.onGround = !!s2[9];
+    }
+  }
+  function netGuestStep(dt) {
+    // 平滑追踪主机发来的坐标
+    for (var i = 0; i < 2; i++) {
+      var f = fighters[i];
+      if (!f || f.netTX === undefined) continue;
+      f.x += (f.netTX - f.x) * Math.min(1, dt * 18);
+      f.y += (f.netTY - f.y) * Math.min(1, dt * 18);
+    }
+    // 发送本地按键
+    var d = {}, any = false;
+    var keys = ['atk', 'jump', 'dodge', 'skill', 'skillHold', 'ult'];
+    for (var k = 0; k < keys.length; k++) {
+      if (PRESS[1][keys[k]]) { d[keys[k]] = 1; PRESS[1][keys[k]] = false; any = true; }
+    }
+    if (HOLD[1].left) { d.left = 1; any = true; }
+    if (HOLD[1].right) { d.right = 1; any = true; }
+    if (any) netSend({ t: 'msg', d: { k: 'input', d: d } });
+  }
+
   /* ------------------------------------------------ main step */
   function updateDemo(dt) {
     if (!demoF) {
@@ -2451,6 +2606,7 @@ const HUD_MAO = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAB4AAAAeCAYAAAA7M
     if (paused) return;
     now += dt;
     if (phase === 'title') { updateDemo(dt); return; }
+    if (netRole === 'guest') { netGuestStep(dt); return; }
     if (introActive) {
       introT += dt;
       if (introT >= introDur) {
@@ -2602,6 +2758,17 @@ const HUD_MAO = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAB4AAAAeCAYAAAA7M
     }
     if (banner) { banner.t += dt; if (banner.t > banner.life) banner = null; }
 
+    if (netRole === 'host') {
+      netAcc = (netAcc || 0) + dt;
+      if (netAcc >= 0.05 && fighters.length === 2) {
+        netAcc = 0;
+        netSend({ t: 'msg', d: { k: 'state', f: [netSnap(fighters[0]), netSnap(fighters[1])] } });
+      }
+      if (phase === 'over' && !netOverSent) {
+        netOverSent = true;
+        netSend({ t: 'msg', d: { k: 'over', winner: winner } });
+      }
+    }
     if (phase === 'over') {
       resultT += dt;
       if (!resultShown && resultT > 1.6) showResult();
@@ -3532,6 +3699,7 @@ const HUD_MAO = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAB4AAAAeCAYAAAA7M
     document.getElementById('selDesc').textContent = info.desc;
     document.getElementById('selSkill').textContent = info.skill;
     document.getElementById('selUlt').textContent = info.ult;
+    if (netRole === 'guest') netSend({ t: 'msg', d: { k: 'p', kit: key } });
     var model = document.getElementById('selModel');
     if (model) model.src = MODELS[key];
     if (!selectedAI) {
@@ -3618,12 +3786,46 @@ const HUD_MAO = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAB4AAAAeCAYAAAA7M
       actx();
       raidMode = b.dataset.mode === 'raid';
       if (modeEl) modeEl.style.display = 'none';
+      if (b.dataset.mode === 'net') {
+        var nt = document.getElementById('net');
+        var ui0 = document.getElementById('netUrl');
+        if (ui0 && !ui0.value) ui0.value = location.origin;
+        if (nt) nt.style.display = 'flex';
+        netStatus('未连接');
+        return;
+      }
       showSelect();
     });
   });
   var mdBackBtn = document.getElementById('mdBack');
   if (mdBackBtn) mdBackBtn.addEventListener('click', function () {
     if (modeEl) modeEl.style.display = 'none';
+    showMenu();
+  });
+
+  var netEl = document.getElementById('net');
+  var netCreateBtn = document.getElementById('netCreate');
+  if (netCreateBtn) netCreateBtn.addEventListener('click', function () {
+    actx();
+    netStatus('连接中…');
+    netConnect().then(function () { netSend({ t: 'create' }); })
+      .catch(function (e) { netStatus(''); netErr('连接失败：' + (e && e.message || e)); });
+  });
+  var netJoinBtn = document.getElementById('netJoin');
+  if (netJoinBtn) netJoinBtn.addEventListener('click', function () {
+    actx();
+    var code = (document.getElementById('netCode') || {}).value || '';
+    code = code.trim();
+    if (!/^\d{4}$/.test(code)) { netErr('请输入 4 位房号'); return; }
+    netStatus('连接中…');
+    netConnect().then(function () { netSend({ t: 'join', code: code }); })
+      .catch(function (e) { netStatus(''); netErr('连接失败：' + (e && e.message || e)); });
+  });
+  var netBackBtn = document.getElementById('netBack');
+  if (netBackBtn) netBackBtn.addEventListener('click', function () {
+    if (netEl) netEl.style.display = 'none';
+    try { if (netWS) netWS.close(); } catch (e) {}
+    netRole = null; netPeer = false;
     showMenu();
   });
 
@@ -3670,6 +3872,11 @@ const HUD_MAO = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAB4AAAAeCAYAAAA7M
   if (selStartBtn) selStartBtn.addEventListener('click', function () {
     if (!selectedKit) return;
     actx();
+    if (netRole === 'guest') {
+      netSend({ t: 'msg', d: { k: 'p', kit: selectedKit } });
+      netErr('已选择 ' + selectedKit + '，等待房主开始');
+      return;
+    }
     tryFullscreenLandscape();
     showStage();
   });
@@ -3696,6 +3903,11 @@ const HUD_MAO = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAB4AAAAeCAYAAAA7M
   var stStartBtn = document.getElementById('stStart');
   if (stStartBtn) stStartBtn.addEventListener('click', function () {
     actx();
+    if (netRole === 'host' && netPeer) {
+      netSend({ t: 'msg', d: { k: 'start', k1: selectedKit, k2: guestKit, stage: selectedStage } });
+      reset(selectedKit, guestKit, selectedStage, 'host');
+      return;
+    }
     reset(selectedKit, selectedAI, selectedStage);
   });
   var stBackBtn = document.getElementById('stBack');
