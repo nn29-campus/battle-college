@@ -2611,7 +2611,7 @@ const HUD_MAO = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAB4AAAAeCAYAAAA7M
       bigs.push({ owner: ev.o, face: ev.f, x: ev.x, y: ev.y, t: 0, phase: 'dash',
                   vx: ev.vx, vy: ev.vy, hits: 0, hitCd: 0, ang: ev.a, aimOff: 0, trackTurn: 2.4, spd0: 700 });
     } else if (ev.e === 'laser') {
-      lasers.push({ x0: ev.x0, y0: ev.y0, x1: ev.x1, y1: ev.y1, t: 0, life: 0.2 });
+      parts.push({ x: ev.x0, y: ev.y0, vx: 0, vy: 0, r: 4, life: 0.16, max: 0.16, c: '#ffffff' });
     } else if (ev.e === 'meteor') {
       meteors.push({ x: ev.x, y: -70, ty: FLOOR - 6, t: 0, fall: 0.32, owner: ev.o, boom: 0, delay: 0, launched: true });
     } else if (ev.e === 'void') {
@@ -2644,6 +2644,7 @@ const HUD_MAO = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAB4AAAAeCAYAAAA7M
       var f = fighters[i], s2 = arr[i];
       if (!f || !s2) continue;
       f.hp = s2[0];
+      f.hpGhost = s2[0];
       f.netTX = s2[1]; f.netTY = s2[2];
       f.face = s2[3]; f.state = s2[4]; f.animT = s2[5];
       f.energy = s2[6];
@@ -2852,7 +2853,7 @@ const HUD_MAO = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAB4AAAAeCAYAAAA7M
 
     if (netRole === 'host') {
       netAcc = (netAcc || 0) + dt;
-      if (netAcc >= 0.033 && fighters.length === 2) {
+      if (netAcc >= 0.05 && fighters.length === 2) {
         netAcc = 0;
         var stateMsg = { t: 'msg', d: { k: 'state', f: [netSnap(fighters[0]), netSnap(fighters[1])], tm: Math.round(timer * 10) / 10 } };
         if (netFXQ.length) { stateMsg.d.fx = netFXQ.slice(0, 24); netFXQ.length = 0; }
