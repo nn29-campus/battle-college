@@ -1314,6 +1314,7 @@ const HUD_MAO = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAB4AAAAeCAYAAAA7M
     f.flash = 0.09;
     f.inv = Math.max(f.inv, 0.06);
     floats.push({ x: f.x, y: f.y - 60, t: 0, life: 0.55, txt: '-' + Math.round(dmg) });
+    fxSend({ e: 'dmg', x: f.x, y: f.y - 60, txt: '-' + Math.round(dmg) });
     for (var i = 0; i < 9; i++) {
       parts.push({
         x: f.x + rnd(-6, 6), y: f.y - rnd(20, 52),
@@ -2543,6 +2544,7 @@ const HUD_MAO = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAB4AAAAeCAYAAAA7M
 
   /* ------------------------------------------------ 联机 */
   var netClient = null, netIn = null, netOut = null, netFXQ = [], netLastHold = -1;
+  var netRX = { state: 0, fx: 0, skill: 0 };
   var netRole = null, netCode = null, netPeer = false;
   var guestKit = 'sao', netAcc = 0;
 
@@ -2663,7 +2665,8 @@ const HUD_MAO = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAB4AAAAeCAYAAAA7M
       HOLD[2].right = d.d.right ? 1 : 0;
     } else if (d.k === 'state' && netRole === 'guest') {
       netApplyState(d.f, d.tm);
-      if (d.fx) for (var fi = 0; fi < d.fx.length; fi++) netPlayFX(d.fx[fi]);
+      netRX.state++;
+      if (d.fx) for (var fi = 0; fi < d.fx.length; fi++) { netRX.fx++; netPlayFX(d.fx[fi]); }
     } else if (d.k === 'over' && netRole === 'guest') {
       winner = d.winner;
       phase = 'over';
@@ -2693,6 +2696,8 @@ const HUD_MAO = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAB4AAAAeCAYAAAA7M
       reds.push({ x: ev.x, y: ev.y, vx: ev.vx, owner: ev.o, t: 0, life: 0.75 });
     } else if (ev.e === 'tongue') {
       tongues.push({ x: ev.x, y: ev.y, face: ev.f, t: 0, life: 0.26, len: ev.len });
+    } else if (ev.e === 'dmg') {
+      floats.push({ x: ev.x, y: ev.y, t: 0, life: 0.55, txt: ev.txt });
     } else if (ev.e === 'spray') {
       for (var i = 0; i < 26; i++) {
         parts.push({ x: ev.x + rnd(-6, 6), y: ev.y + rnd(-4, 4), vx: ev.f * rnd(60, 220),
@@ -3824,6 +3829,15 @@ const HUD_MAO = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAB4AAAAeCAYAAAA7M
     ctx.restore();
     if (phase === 'fight' && countdownT > 0) drawCountdown();
     if (phase !== 'title' && !introActive) drawHUD();
+    if (netRole === 'guest' && phase === 'fight') {
+      ctx.fillStyle = 'rgba(0,0,0,.55)';
+      ctx.fillRect(2, 2, 96, 12);
+      ctx.fillStyle = '#8fe3ff';
+      ctx.font = 'bold 7px system-ui';
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'top';
+      ctx.fillText('RX ' + netRX.state + ' FX ' + netRX.fx + ' SK ' + netRX.skill, 4, 4);
+    }
     updateControls();
   }
 
