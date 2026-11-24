@@ -2714,8 +2714,50 @@ const HUD_MAO = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAB4AAAAeCAYAAAA7M
     }
     if (tm !== undefined) timer = tm;
   }
+  function updateGuestFX(dt) {
+    for (var p = parts.length - 1; p >= 0; p--) {
+      var q = parts[p];
+      q.life -= dt; q.x += q.vx * dt; q.y += q.vy * dt;
+      q.vy += (q.g === undefined ? 520 : q.g) * dt;
+      if (q.life <= 0) parts.splice(p, 1);
+    }
+    for (var f2 = floats.length - 1; f2 >= 0; f2--) {
+      floats[f2].t += dt; floats[f2].y -= 26 * dt;
+      if (floats[f2].t > floats[f2].life) floats.splice(f2, 1);
+    }
+    for (var fl = flashes.length - 1; fl >= 0; fl--) {
+      flashes[fl].life -= dt; if (flashes[fl].life <= 0) flashes.splice(fl, 1);
+    }
+    var timed = [shocks, tongues, licks, crosses, lasers, waves, orbs];
+    for (var a = 0; a < timed.length; a++) {
+      var arr = timed[a];
+      for (var i = arr.length - 1; i >= 0; i--) {
+        arr[i].t += dt;
+        if (arr[i].t > arr[i].life) arr.splice(i, 1);
+      }
+    }
+    for (var r = reds.length - 1; r >= 0; r--) {
+      reds[r].t += dt; reds[r].x += reds[r].vx * dt;
+      if (reds[r].t > reds[r].life) reds.splice(r, 1);
+    }
+    for (var b = bigs.length - 1; b >= 0; b--) {
+      bigs[b].t += dt; bigs[b].x += bigs[b].vx * dt;
+      bigs[b].y += (bigs[b].vy || 0) * dt;
+      if (bigs[b].x < -80 || bigs[b].x > W + 80) bigs.splice(b, 1);
+    }
+    for (var m = meteors.length - 1; m >= 0; m--) {
+      var mm = meteors[m];
+      if (mm.boom > 0) { mm.boom -= dt; if (mm.boom <= 0) meteors.splice(m, 1); continue; }
+      mm.t += dt;
+      var k = Math.min(1, mm.t / (mm.fall || 0.32));
+      mm.y = -70 + (mm.ty + 70) * k;
+      if (k >= 1) mm.boom = 0.4;
+    }
+  }
+
   function netGuestStep(dt) {
     if (countdownT > 0) { countdownT -= dt; return; }   // 客机也等倒计时
+    updateGuestFX(dt);   // 客机本地推进特效生命周期
     // 平滑追踪主机发来的坐标
     for (var i = 0; i < 2; i++) {
       var f = fighters[i];
