@@ -4,14 +4,15 @@
 <meta charset="utf-8">
 <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <meta name="theme-color" content="#0d0b10">
 <meta name="mobile-web-app-capable" content="yes">
 <title>异能者</title>
 <style>
   *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;
     -webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
-  html,body{height:100%;overflow:hidden;overscroll-behavior:none;touch-action:manipulation;background:#0b0910;font-family:system-ui,-apple-system,"Noto Sans CJK SC",sans-serif}
+  html,body{height:100%;overflow:hidden;overscroll-behavior:none;touch-action:manipulation;
+    -webkit-text-size-adjust:100%;-webkit-tap-highlight-color:transparent;background:#0b0910;font-family:system-ui,-apple-system,"Noto Sans CJK SC",sans-serif}
   #app{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:#0b0910}
   #game{width:100%;height:100%;object-fit:contain;image-rendering:pixelated;
         image-rendering:crisp-edges;display:block;touch-action:none}
@@ -201,7 +202,7 @@
   .nt-title{font:700 clamp(14px,3.4vw,20px)/1 system-ui;letter-spacing:.34em;color:#e6e6e6}
   .nt-row{display:flex;gap:8px;align-items:center;justify-content:center;flex-wrap:wrap}
   .nt-input{width:clamp(150px,42vw,320px);padding:11px 12px;background:#101012;color:#eee;
-    border:1px solid rgba(255,255,255,.3);font:600 12px system-ui;letter-spacing:.04em}
+    border:1px solid rgba(255,255,255,.3);font:600 16px system-ui;letter-spacing:.04em}
   .nt-input.nt-code{width:88px;text-align:center;letter-spacing:.3em}
   .nt-btn{padding:11px 18px;background:#fff;color:#0a0a0b;border:1px solid #fff;
     font:700 12px system-ui;letter-spacing:.14em}
@@ -303,6 +304,12 @@
     .sel-top{margin:2px 0 8px}
     .sel-model{width:clamp(64px,12vw,110px)}
   }
+  #rotate{position:fixed;inset:0;z-index:70;display:none;align-items:center;justify-content:center;
+    background:#0b0b0e;color:#eee;text-align:center;pointer-events:none}
+  #rotate.on{display:flex}
+  .rot-box .rot-ico{font-size:52px;color:#fff;opacity:.85}
+  .rot-box p{margin-top:12px;font:700 15px system-ui;letter-spacing:.2em}
+  .rot-box small{display:block;margin-top:6px;color:#8a8a90;font-size:11px}
 </style>
 </head>
 <body>
@@ -319,6 +326,13 @@ window.addEventListener('error', function (e) {
   window.__errs.push(e.message);
 });
 </script>
+<div id="rotate">
+  <div class="rot-box">
+    <div class="rot-ico">↻</div>
+    <p>请横屏游玩</p>
+    <small>把手机横过来</small>
+  </div>
+</div>
 <div id="app"><canvas id="game"></canvas></div>
 <div id="ui"></div>
 
@@ -634,6 +648,16 @@ const HUD_MAO = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAB4AAAAeCAYAAAA7M
   function held(pid, k) { return !!HOLD[pid][k]; }
   function take(pid, k) { if (PRESS[pid][k]) { PRESS[pid][k] = false; return true; } return false; }
 
+  var rotateEl = null;
+  function syncRotate() {
+    if (!rotateEl) rotateEl = document.getElementById('rotate');
+    if (!rotateEl) return;
+    rotateEl.classList.toggle('on', window.innerHeight > window.innerWidth * 1.04);
+  }
+  addEventListener('resize', syncRotate);
+  addEventListener('orientationchange', function () { setTimeout(syncRotate, 200); });
+  if (window.visualViewport) window.visualViewport.addEventListener('resize', syncRotate);
+
   function tryFullscreenLandscape() {
     try {
       var el = document.documentElement;
@@ -647,7 +671,9 @@ const HUD_MAO = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAB4AAAAeCAYAAAA7M
   }
   document.addEventListener('pointerdown', function () {
     tryFullscreenLandscape();
+    syncRotate();
   }, { once: true });
+  syncRotate();
 
   var SKILL_DOWN = { 1: 0, 2: 0 };
   var KEYMAP = {
@@ -2513,31 +2539,27 @@ const HUD_MAO = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAB4AAAAeCAYAAAA7M
   function netBroker() {
     var el = document.getElementById('netUrl');
     var v = (el && el.value || '').trim();
-    return v || 'wss://broker.emqx.io:8084/mqtt';
+    if (!v) v = location.origin;
+    return v.replace(/^http/, 'ws').replace(/\/+$/, '');
   }
   function netConnect() {
     return new Promise(function (resolve, reject) {
-      try { if (netClient) { try { netClient.end(true); } catch (e) {} netClient = null; } } catch (e) {}
-      var c;
-      try {
-        c = mqtt.connect(netBroker(), {
-          clientId: 'xz_' + Math.random().toString(16).slice(2, 10),
-          clean: true, reconnectPeriod: 3000, connectTimeout: 15000, keepalive: 30
-        });
-      } catch (e) { return reject(e); }
+      try { if (netClient) { try { netClient.close(); } catch (e) {} netClient = null; } } catch (e) {}
+      var ws;
+      try { ws = new WebSocket(netBroker()); } catch (e) { return reject(e); }
       var done = false;
-      c.on('connect', function () { if (!done) { done = true; netClient = c; resolve(c); } });
-      c.on('error', function (e) { if (!done) { done = true; reject(e || new Error('连接失败')); } });
-      c.on('message', function (topic, payload) {
-        var m; try { m = JSON.parse(payload.toString()); } catch (e) { return; }
+      ws.onopen = function () { if (!done) { done = true; netClient = ws; resolve(ws); } };
+      ws.onerror = function () { if (!done) { done = true; reject(new Error('连接失败')); } };
+      ws.onmessage = function (ev) {
+        var m; try { m = JSON.parse(ev.data); } catch (e) { return; }
         netOnMessage(m);
-      });
-      c.on('close', function () { netPeer = false; netStatus('连接已断开'); });
+      };
+      ws.onclose = function () { netPeer = false; netStatus('连接已断开'); };
     });
   }
   function netSend(obj) {
-    if (!netClient || !netOut) return;
-    try { netClient.publish(netOut, JSON.stringify(obj), { qos: 0 }); } catch (e) {}
+    if (!netClient || netClient.readyState !== 1) return;
+    try { netClient.send(JSON.stringify(obj)); } catch (e) {}
   }
   function netOpenSelect() {
     var nt = document.getElementById('net');
@@ -2546,6 +2568,17 @@ const HUD_MAO = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAB4AAAAeCAYAAAA7M
   }
 
   function netOnMessage(m) {
+    if (m.t === 'created') {
+      netCode = m.code;
+      netStatus('房间 ' + m.code + ' · 等待对手加入…');
+      return;
+    }
+    if (m.t === 'joined') {
+      netCode = m.code;
+      netStatus('已加入房间 ' + m.code + ' · 等房主开始');
+      netOpenSelect();
+      return;
+    }
     if (m.t === 'join' && netRole === 'host' && !netPeer) {
       netPeer = true;
       netSend({ t: 'ack' });
@@ -3916,15 +3949,11 @@ const HUD_MAO = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAB4AAAAeCAYAAAA7M
   if (netCreateBtn) netCreateBtn.addEventListener('click', function () {
     actx();
     netStatus('连接中转服务器…');
-    netConnect().then(function (c) {
-      var code = String(Math.floor(1000 + Math.random() * 9000));
-      netCode = code;
-      netIn = 'xzyw/' + code + '/g';
-      netOut = 'xzyw/' + code + '/h';
-      c.subscribe(netIn, { qos: 0 });
+    netConnect().then(function () {
       netRole = 'host';
       netPeer = false;
-      netStatus('房间 ' + code + ' · 等待对手加入…');
+      netSend({ t: 'create' });
+      netStatus('已连接 · 正在创建房间…');
     }).catch(function (e) { netStatus(''); netErr('连接失败：' + (e && e.message || e)); });
   });
   var netJoinBtn = document.getElementById('netJoin');
@@ -3934,15 +3963,11 @@ const HUD_MAO = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAB4AAAAeCAYAAAA7M
     code = code.trim();
     if (!/^\d{4}$/.test(code)) { netErr('请输入 4 位房号'); return; }
     netStatus('连接中转服务器…');
-    netConnect().then(function (c) {
-      netCode = code;
-      netIn = 'xzyw/' + code + '/h';
-      netOut = 'xzyw/' + code + '/g';
-      c.subscribe(netIn, { qos: 0 });
+    netConnect().then(function () {
       netRole = 'guest';
       netPeer = false;
+      netSend({ t: 'join', code: code });
       netStatus('正在加入房间 ' + code + '…');
-      setTimeout(function () { netSend({ t: 'join' }); }, 400);
     }).catch(function (e) { netStatus(''); netErr('连接失败：' + (e && e.message || e)); });
   });
   var netBackBtn = document.getElementById('netBack');
