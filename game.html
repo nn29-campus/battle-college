@@ -330,7 +330,7 @@ window.addEventListener('error', function (e) {
   <div class="rot-box">
     <div class="rot-ico">↻</div>
     <p>请横屏游玩</p>
-    <small>把手机横过来</small>
+    <small id="rotTip">把手机横过来</small>
   </div>
 </div>
 <div id="app"><canvas id="game"></canvas></div>
@@ -648,11 +648,38 @@ const HUD_MAO = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAB4AAAAeCAYAAAA7M
   function held(pid, k) { return !!HOLD[pid][k]; }
   function take(pid, k) { if (PRESS[pid][k]) { PRESS[pid][k] = false; return true; } return false; }
 
+  function doubleTapGuard() {
+    var lastT = 0, lastX = 0, lastY = 0;
+    document.addEventListener('touchend', function (e) {
+      var now = Date.now();
+      var t = e.changedTouches && e.changedTouches[0];
+      if (!t) return;
+      if (now - lastT < 320 && Math.abs(t.clientX - lastX) < 40 && Math.abs(t.clientY - lastY) < 40) {
+        e.preventDefault();     // 吃掉第二次点击，阻止双击放大
+        lastT = 0;
+        return;
+      }
+      lastT = now; lastX = t.clientX; lastY = t.clientY;
+    }, { passive: false });
+    // 捏合缩放兜底
+    document.addEventListener('gesturestart', function (e) { e.preventDefault(); }, { passive: false });
+  }
+  doubleTapGuard();
+
   var rotateEl = null;
   function syncRotate() {
     if (!rotateEl) rotateEl = document.getElementById('rotate');
     if (!rotateEl) return;
-    rotateEl.classList.toggle('on', window.innerHeight > window.innerWidth * 1.04);
+    var portrait = window.innerHeight > window.innerWidth * 1.04;
+    rotateEl.classList.toggle('on', portrait);
+    if (portrait) {
+      var tip = document.getElementById('rotTip');
+      var ua = navigator.userAgent || '';
+      var inApp = /QQ\//.test(ua) || /MicroMessenger/i.test(ua) || /Weibo/i.test(ua);
+      if (tip) tip.textContent = inApp
+        ? '内置浏览器无法横屏，点右上角「···」选择「在浏览器打开」'
+        : '把手机横过来';
+    }
   }
   addEventListener('resize', syncRotate);
   addEventListener('orientationchange', function () { setTimeout(syncRotate, 200); });
