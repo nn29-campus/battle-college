@@ -997,7 +997,7 @@ const HUD_MAO = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAB4AAAAeCAYAAAA7M
     introActive = !!bossF;
     introT = 0; introWho = bossF;
     introDur = 3.05;
-    countdownT = (bossF || netMode === 'guest') ? 0 : 3.0;
+    countdownT = bossF ? 0 : 3.0;
     setTimeout(function () { if (phase === 'fight' && countdownT > 2.6) sfx('count'); }, 30);
     buildControls('ai');
     scheduleRelayout();
@@ -2577,14 +2577,14 @@ const HUD_MAO = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAB4AAAAeCAYAAAA7M
     if (d.k === 'p') { guestKit = d.kit || guestKit; }
     else if (d.k === 'start' && netRole === 'guest') {
       selectedKit = d.k2; selectedAI = d.k1;
-      reset(d.k2, d.k1, d.stage, 'guest');
+      reset(d.k1, d.k2, d.stage, 'guest');
     } else if (d.k === 'input' && netRole === 'host') {
       var keys = ['atk', 'jump', 'dodge', 'skill', 'skillHold', 'ult'];
       for (var i = 0; i < keys.length; i++) if (d.d[keys[i]]) PRESS[2][keys[i]] = true;
       HOLD[2].left = d.d.left ? 1 : 0;
       HOLD[2].right = d.d.right ? 1 : 0;
     } else if (d.k === 'state' && netRole === 'guest') {
-      netApplyState(d.f);
+      netApplyState(d.f, d.tm);
     } else if (d.k === 'over' && netRole === 'guest') {
       winner = d.winner;
       phase = 'over';
@@ -2596,7 +2596,7 @@ const HUD_MAO = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAB4AAAAeCAYAAAA7M
             Math.round(f.energy), f.form === 'deer' ? 1 : 0,
             f.buffT > 0 ? 1 : 0, f.onGround ? 1 : 0];
   }
-  function netApplyState(arr) {
+  function netApplyState(arr, tm) {
     if (!arr || arr.length < 2) return;
     for (var i = 0; i < 2; i++) {
       var f = fighters[i], s2 = arr[i];
@@ -2609,14 +2609,16 @@ const HUD_MAO = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAB4AAAAeCAYAAAA7M
       f.buffT = s2[8] ? 1 : 0;
       f.onGround = !!s2[9];
     }
+    if (tm !== undefined) timer = tm;
   }
   function netGuestStep(dt) {
+    if (countdownT > 0) { countdownT -= dt; return; }   // 客机也等倒计时
     // 平滑追踪主机发来的坐标
     for (var i = 0; i < 2; i++) {
       var f = fighters[i];
       if (!f || f.netTX === undefined) continue;
-      f.x += (f.netTX - f.x) * Math.min(1, dt * 18);
-      f.y += (f.netTY - f.y) * Math.min(1, dt * 18);
+      f.x += (f.netTX - f.x) * Math.min(1, dt * 30);
+      f.y += (f.netTY - f.y) * Math.min(1, dt * 30);
     }
     // 发送本地按键
     var d = {}, any = false;
@@ -2807,9 +2809,9 @@ const HUD_MAO = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAB4AAAAeCAYAAAA7M
 
     if (netRole === 'host') {
       netAcc = (netAcc || 0) + dt;
-      if (netAcc >= 0.05 && fighters.length === 2) {
+      if (netAcc >= 0.033 && fighters.length === 2) {
         netAcc = 0;
-        netSend({ t: 'msg', d: { k: 'state', f: [netSnap(fighters[0]), netSnap(fighters[1])] } });
+        netSend({ t: 'msg', d: { k: 'state', f: [netSnap(fighters[0]), netSnap(fighters[1])], tm: Math.round(timer * 10) / 10 } });
       }
       if (phase === 'over' && !netOverSent) {
         netOverSent = true;
