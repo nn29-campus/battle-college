@@ -1664,6 +1664,7 @@ const HUD_MAO = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAB4AAAAeCAYAAAA7M
     var y = f.y - 34;
     var x0 = f.x + f.face * 10;
     crosses.push({ x: x0, y: y, face: f.face, t: 0, life: 0.36, len: 300 });
+    fxSend({ e: 'cross', x: x0, y: y, f: f.face });
     if (foe.hp > 0 && foe.inv <= 0 && foe.state !== 'ko') {
       var inFront = f.face > 0 ? (foe.x > x0 - 12) : (foe.x < x0 + 12);
       if (inFront && Math.abs(foe.x - x0) < 300 && Math.abs((foe.y - 32) - y) < 30) {
@@ -1680,10 +1681,12 @@ const HUD_MAO = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAB4AAAAeCAYAAAA7M
     var t = 0;
     for (var i = 0; i < 3; i++) {
       t += (i === 0 ? 0 : 0.16 + Math.random() * 0.3);
+      var mx = clamp(base + rnd(-26, 26), 44, W - 44);
       meteors.push({
-        x: clamp(base + rnd(-26, 26), 44, W - 44), y: -70, ty: FLOOR - 6,
+        x: mx, y: -70, ty: FLOOR - 6,
         t: 0, fall: 0.32, delay: t, owner: f.pid, boom: 0, launched: false
       });
+      fxSend({ e: 'meteor', x: mx, o: f.pid });
     }
     sfx('summon');
   }
@@ -1828,6 +1831,7 @@ const HUD_MAO = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAB4AAAAeCAYAAAA7M
     var x0 = f.x + f.face * 6;
     var reach = 100;
     tongues.push({ x: x0, y: y, face: f.face, t: 0, life: 0.26, len: reach });
+    fxSend({ e: 'tongue', x: x0, y: y, f: f.face, len: reach });
     hitPets({ x: f.face > 0 ? x0 : x0 - reach, y: y - 16, w: reach, h: 32 }, 78, f.pid);
     if (foe.hp > 0 && foe.inv <= 0 && foe.state !== 'ko') {
       var inFront = f.face > 0 ? (foe.x > x0 - 10) : (foe.x < x0 + 10);
@@ -1861,6 +1865,7 @@ const HUD_MAO = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAB4AAAAeCAYAAAA7M
   }
 
   function pipeSpray(f, foe) {
+    fxSend({ e: 'spray', x: f.x + f.face * 12, y: f.y - 34, f: f.face });
     var y = f.y - 34;
     var x0 = f.x + f.face * 12;
     var reach = 96;
@@ -1926,6 +1931,7 @@ const HUD_MAO = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAB4AAAAeCAYAAAA7M
 
   function summonBigSausage(f) {
     for (var n = 0; n < 2; n++) {
+      fxSend({ e: 'big', x: f.x + f.face * 46, y: FLOOR - 34, f: f.face, vx: f.face * 700, vy: 0, a: f.face > 0 ? 0 : Math.PI, o: f.pid });
       bigs.push({
         owner: f.pid, face: f.face,
         x: f.x + f.face * (46 + n * 10),
@@ -2278,11 +2284,13 @@ const HUD_MAO = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAB4AAAAeCAYAAAA7M
     f.armorT = Math.max(f.armorT, 0.45);
     if (mode === 'red') {
       // 赫：高密度暗红小球，飞行后爆开
+      fxSend({ e: 'red', x: f.x + f.face * 22, y: f.y - 32, vx: f.face * 330, o: f.pid });
       reds.push({ x: f.x + f.face * 22, y: f.y - 32, vx: f.face * 330,
                   owner: f.pid, t: 0, life: 0.75 });
       sfx('laser');
     } else {
       // 苍：蓝色能量球，持续吸引
+      fxSend({ e: 'orb', x: f.x + f.face * 26, y: f.y - 32, vx: f.face * 150, o: f.pid });
       orbs.push({ x: f.x + f.face * 26, y: f.y - 32, vx: f.face * 150,
                   owner: f.pid, t: 0, life: 2.2, tick: 0 });
       sfx('summon');
@@ -2419,6 +2427,7 @@ const HUD_MAO = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAB4AAAAeCAYAAAA7M
 
   function openVoid(f, foe) {
     voids = { owner: f.pid, t: 0, dur: 10, tick: 0.2 };
+    fxSend({ e: 'void', o: f.pid });
     flashes.push({ t: 0, life: 0.3 });
     shake = 10;
     sfx('domain');
@@ -2480,7 +2489,7 @@ const HUD_MAO = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAB4AAAAeCAYAAAA7M
   var flashes = [];
 
   /* ------------------------------------------------ 联机 */
-  var netClient = null, netIn = null, netOut = null;
+  var netClient = null, netIn = null, netOut = null, netFXQ = [];
   var netRole = null, netCode = null, netPeer = false;
   var guestKit = 'sao', netAcc = 0;
 
@@ -2585,9 +2594,42 @@ const HUD_MAO = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAB4AAAAeCAYAAAA7M
       HOLD[2].right = d.d.right ? 1 : 0;
     } else if (d.k === 'state' && netRole === 'guest') {
       netApplyState(d.f, d.tm);
+      if (d.fx) for (var fi = 0; fi < d.fx.length; fi++) netPlayFX(d.fx[fi]);
     } else if (d.k === 'over' && netRole === 'guest') {
       winner = d.winner;
       phase = 'over';
+    }
+  }
+  function fxSend(ev) {
+    if (netRole === 'host') netFXQ.push(ev);
+  }
+  function netPlayFX(ev) {
+    if (!ev) return;
+    if (ev.e === 'cross') {
+      crosses.push({ x: ev.x, y: ev.y, face: ev.f, t: 0, life: 0.36, len: 300 });
+    } else if (ev.e === 'big') {
+      bigs.push({ owner: ev.o, face: ev.f, x: ev.x, y: ev.y, t: 0, phase: 'dash',
+                  vx: ev.vx, vy: ev.vy, hits: 0, hitCd: 0, ang: ev.a, aimOff: 0, trackTurn: 2.4, spd0: 700 });
+    } else if (ev.e === 'laser') {
+      lasers.push({ x0: ev.x0, y0: ev.y0, x1: ev.x1, y1: ev.y1, t: 0, life: 0.2 });
+    } else if (ev.e === 'meteor') {
+      meteors.push({ x: ev.x, y: -70, ty: FLOOR - 6, t: 0, fall: 0.32, owner: ev.o, boom: 0, delay: 0, launched: true });
+    } else if (ev.e === 'void') {
+      voids = { owner: ev.o, t: 0, dur: 10, tick: 0.2 };
+    } else if (ev.e === 'orb') {
+      orbs.push({ x: ev.x, y: ev.y, vx: ev.vx, owner: ev.o, t: 0, life: 2.2, tick: 0 });
+    } else if (ev.e === 'wave') {
+      waves.push({ x: ev.x, y: ev.y, owner: ev.o, face: 1, t: 0, life: 0.42, hit: true });
+    } else if (ev.e === 'red') {
+      reds.push({ x: ev.x, y: ev.y, vx: ev.vx, owner: ev.o, t: 0, life: 0.75 });
+    } else if (ev.e === 'tongue') {
+      tongues.push({ x: ev.x, y: ev.y, face: ev.f, t: 0, life: 0.26, len: ev.len });
+    } else if (ev.e === 'spray') {
+      for (var i = 0; i < 26; i++) {
+        parts.push({ x: ev.x + rnd(-6, 6), y: ev.y + rnd(-4, 4), vx: ev.f * rnd(60, 220),
+                     vy: rnd(-60, 60), g: 220, r: rnd(1.5, 3.5), life: 0.6, max: 0.9,
+                     c: i % 2 ? '#c1121f' : '#8f0b16' });
+      }
     }
   }
   function netSnap(f) {
@@ -2720,6 +2762,7 @@ const HUD_MAO = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAB4AAAAeCAYAAAA7M
               var ex2 = ax + (dx / dl) * 190;      // 穿过目标继续延伸，激光更长
               var ey2 = ay + (dy / dl) * 190;
               lasers.push({ x0: sm.x, y0: sm.y, x1: ex2, y1: ey2, t: 0, life: 0.2 });
+              fxSend({ e: 'laser', x0: sm.x, y0: sm.y, x1: ex2, y1: ey2 });
               if (tg.hp > 0 && tg.inv <= 0 && tg.state !== 'ko' &&
                   distToSeg(tg.x, tg.y - 26, sm.x, sm.y, ex2, ey2) < 15) {
                 damage(tg, 20, { kb: sm.face * 40, stun: 0.12, from: sm.face });
@@ -2811,7 +2854,9 @@ const HUD_MAO = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAB4AAAAeCAYAAAA7M
       netAcc = (netAcc || 0) + dt;
       if (netAcc >= 0.033 && fighters.length === 2) {
         netAcc = 0;
-        netSend({ t: 'msg', d: { k: 'state', f: [netSnap(fighters[0]), netSnap(fighters[1])], tm: Math.round(timer * 10) / 10 } });
+        var stateMsg = { t: 'msg', d: { k: 'state', f: [netSnap(fighters[0]), netSnap(fighters[1])], tm: Math.round(timer * 10) / 10 } };
+        if (netFXQ.length) { stateMsg.d.fx = netFXQ.slice(0, 24); netFXQ.length = 0; }
+        netSend(stateMsg);
       }
       if (phase === 'over' && !netOverSent) {
         netOverSent = true;
