@@ -803,7 +803,7 @@ const HUD_MAO = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAB4AAAAeCAYAAAA7M
       return b;
     }
 
-    if (m === 'ai') {
+    if (m === 'ai' || m === 'net') {
       // 边缘留白：避开浏览器左右边缘的手势区（亮度/音量）
       var pad = Math.max(30, Math.round(Math.min(vw, vh) * 0.075));
       // ---- joystick (left)
@@ -996,7 +996,7 @@ const HUD_MAO = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAB4AAAAeCAYAAAA7M
     introActive = !!bossF;
     introT = 0; introWho = bossF;
     introDur = 3.05;
-    countdownT = bossF ? 0 : 3.0;
+    countdownT = (bossF || netMode === 'guest') ? 0 : 3.0;
     setTimeout(function () { if (phase === 'fight' && countdownT > 2.6) sfx('count'); }, 30);
     buildControls('ai');
     scheduleRelayout();
@@ -3788,7 +3788,7 @@ const HUD_MAO = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAB4AAAAeCAYAAAA7M
   function showSelect() {
     if (modeEl) modeEl.style.display = 'none';
     var aiRow = document.querySelector('.sel-ai');
-    if (aiRow) aiRow.style.display = raidMode ? 'none' : 'block';
+    if (aiRow) aiRow.style.display = (raidMode || netRole) ? 'none' : 'block';
     var bc = document.getElementById('bossCard');
     if (bc) {
       var unlockedNow = bossUnlocked();
@@ -3937,7 +3937,7 @@ const HUD_MAO = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAB4AAAAeCAYAAAA7M
     actx();
     if (netRole === 'guest') {
       netSend({ t: 'msg', d: { k: 'p', kit: selectedKit } });
-      netErr('已选择 ' + selectedKit + '，等待房主开始');
+      netStatus('已选择 ' + selectedKit + '，等待房主开始');
       return;
     }
     tryFullscreenLandscape();
