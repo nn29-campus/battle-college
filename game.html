@@ -2542,7 +2542,7 @@ const HUD_MAO = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAB4AAAAeCAYAAAA7M
   var flashes = [];
 
   /* ------------------------------------------------ 联机 */
-  var netClient = null, netIn = null, netOut = null, netFXQ = [];
+  var netClient = null, netIn = null, netOut = null, netFXQ = [], netLastHold = -1;
   var netRole = null, netCode = null, netPeer = false;
   var guestKit = 'sao', netAcc = 0;
 
@@ -2698,6 +2698,37 @@ const HUD_MAO = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAB4AAAAeCAYAAAA7M
             Math.round(f.energy), f.form === 'deer' ? 1 : 0,
             f.buffT > 0 ? 1 : 0, f.onGround ? 1 : 0];
   }
+  function netStateFX(f, prevState) {
+    if (f.state === prevState) return;
+    if (f.state === 'skill') {
+      if (f.kit.skill === 'gojo') {
+        crosses.push({ x: f.x, y: f.y - 34, face: f.face, t: 0, life: 0.3, len: 200 });
+      } else if (f.kit.skill === 'beam') {
+        crosses.push({ x: f.x + f.face * 10, y: f.y - 34, face: f.face, t: 0, life: 0.34, len: 300 });
+      } else if (f.kit.skill === 'tongue') {
+        tongues.push({ x: f.x + f.face * 10, y: f.y - 34, face: f.face, t: 0, life: 0.26, len: 100 });
+      } else if (f.kit.skill === 'sausage') {
+        if (f.buffT > 0) {
+          bigs.push({ owner: f.pid, face: f.face, x: f.x + f.face * 46, y: FLOOR - 34,
+                      t: 0, phase: 'dash', vx: f.face * 700, vy: 0, hits: 2, hitCd: 9,
+                      ang: f.face > 0 ? 0 : Math.PI, aimOff: 0, trackTurn: 2.4, spd0: 700 });
+        } else {
+          for (var sn = 0; sn < 2; sn++) {
+            summons.push({ homing: true, owner: f.pid, face: f.face,
+                           x: f.x + f.face * 14 + (sn - 0.5) * 12, y: FLOOR - 30,
+                           hx: f.x + f.face * (sn - 0.5) * 60, hy: FLOOR - 60 - sn * 20,
+                           sp: 3, swA: 16, swF: 2, ph: sn * 3, ex: 0, ey: 0,
+                           t: 0, dieAt: 2.2, shots: 0, fireT: 99, bob: 0 });
+          }
+        }
+      }
+    } else if (f.state === 'ult') {
+      if (f.kit.ult === 'muryo') {
+        voids = { owner: f.pid, t: 0, dur: 10, tick: 0.2 };
+      }
+    }
+  }
+
   function netApplyState(arr, tm) {
     if (!arr || arr.length < 2) return;
     for (var i = 0; i < 2; i++) {
@@ -2771,8 +2802,11 @@ const HUD_MAO = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAB4AAAAeCAYAAAA7M
     for (var k = 0; k < keys.length; k++) {
       if (PRESS[1][keys[k]]) { d[keys[k]] = 1; PRESS[1][keys[k]] = false; any = true; }
     }
-    if (HOLD[1].left) { d.left = 1; any = true; }
-    if (HOLD[1].right) { d.right = 1; any = true; }
+    // 方向始终随包发送，松开时发 0，远端才会停下
+    d.left = HOLD[1].left ? 1 : 0;
+    d.right = HOLD[1].right ? 1 : 0;
+    var holdKey = (d.left ? 1 : 0) + (d.right ? 2 : 0);
+    if (holdKey !== netLastHold) { netLastHold = holdKey; any = true; }
     if (any) netSend({ t: 'msg', d: { k: 'input', d: d } });
   }
 
