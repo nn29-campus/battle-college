@@ -3308,7 +3308,7 @@ const HUD_MAO = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAB4AAAAeCAYAAAA7M
     if (boss) { boss.vx = 0; boss.vy = 0; setState(boss, 'idle'); }
     raidCut = null;
     deathWord = null;
-    raidCount = 0;
+    raidCount = 3.0;              // 上场后在战场上倒计时 3 秒
   }
 
   function step(dt) {
