@@ -3909,11 +3909,9 @@ const HUD_MAO = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAB4AAAAeCAYAAAA7M
       ctx.fillRect(bx0 - 1, by0 - 1, w0 + 2, h0 + 2);
       ctx.fillStyle = 'rgba(120,150,180,.35)';
       ctx.fillRect(bx0, by0, w0, h0);
-      ctx.fillStyle = '#ffd166';
+      ctx.fillStyle = '#f5c542';                         // 黄条主体
       ctx.fillRect(bx0, by0, w0 * f.stam, h0);
-      ctx.fillStyle = 'rgba(255,236,170,.95)';
-      ctx.fillRect(bx0, by0, w0 * f.stam, h0);
-      ctx.fillStyle = 'rgba(255,255,255,.85)';
+      ctx.fillStyle = 'rgba(255,228,140,.95)';           // 顶部高光
       ctx.fillRect(bx0, by0, w0 * f.stam, 1);
       ctx.strokeStyle = 'rgba(255,255,255,.35)';
       ctx.lineWidth = 0.6;
